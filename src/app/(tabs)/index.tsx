@@ -1,0 +1,142 @@
+import { Pressable, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+
+import { Card } from '@/components/ui/card';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { BorderRadius, Colors, FlatBorder, Spacing, Typography } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/hooks/use-auth';
+
+function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <Card variant="outlined" padding="three" style={styles.statCard}>
+      <ThemedText style={[Typography.h1, { color }]}>{value}</ThemedText>
+      <ThemedText style={[Typography.small, styles.statLabel]} themeColor="textSecondary">
+        {label.toUpperCase()}
+      </ThemedText>
+    </Card>
+  );
+}
+
+export default function HomeScreen() {
+  const theme = useTheme();
+  const { user } = useAuth();
+
+  return (
+    <ThemedView style={styles.container}>
+      <StatusBar style="dark" />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <ThemedText style={Typography.caption} themeColor="textSecondary">
+            Welcome back
+          </ThemedText>
+          <ThemedText style={Typography.h1}>{user?.email?.split('@')[0] ?? 'Friend'}</ThemedText>
+        </View>
+
+        <View style={styles.cameraSection}>
+          <Pressable
+            onPress={() => router.push('/camera')}
+            style={({ pressed }) => [
+              styles.cameraButton,
+              { backgroundColor: pressed ? theme.accent : theme.primary },
+            ]}
+          >
+            <ThemedText style={styles.cameraIcon}>+</ThemedText>
+          </Pressable>
+          <ThemedText style={[Typography.h3, styles.cameraLabel]}>Scan an Item</ThemedText>
+          <ThemedText style={Typography.caption} themeColor="textSecondary">
+            Take a photo to get started
+          </ThemedText>
+        </View>
+
+        <View style={styles.statsSection}>
+          <ThemedText style={[Typography.captionBold, styles.sectionTitle]}>YOUR STATS</ThemedText>
+          <View style={styles.statsRow}>
+            <StatCard label="Donated" value={0} color={theme.donate} />
+            <StatCard label="Sold" value={0} color={theme.sell} />
+            <StatCard label="Tossed" value={0} color={theme.discard} />
+          </View>
+        </View>
+
+        <View style={styles.recentSection}>
+          <ThemedText style={[Typography.captionBold, styles.sectionTitle]}>
+            RECENT ITEMS
+          </ThemedText>
+          <Card variant="outlined" padding="five">
+            <View style={styles.emptyState}>
+              <ThemedText style={Typography.bodyBold}>No items yet</ThemedText>
+              <ThemedText style={Typography.caption} themeColor="textSecondary">
+                Scan your first item to see it here
+              </ThemedText>
+            </View>
+          </Card>
+        </View>
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    padding: Spacing.four,
+  },
+  header: {
+    marginBottom: Spacing.five,
+  },
+  cameraSection: {
+    alignItems: 'center',
+    marginBottom: Spacing.six,
+  },
+  cameraButton: {
+    width: 96,
+    height: 96,
+    borderRadius: BorderRadius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...FlatBorder,
+  },
+  cameraIcon: {
+    fontSize: 44,
+    color: '#FBF3E4',
+    marginTop: -4,
+    fontFamily: Typography.h1.fontFamily,
+  },
+  cameraLabel: {
+    marginTop: Spacing.three,
+  },
+  statsSection: {
+    marginBottom: Spacing.four,
+  },
+  sectionTitle: {
+    marginBottom: Spacing.two,
+    letterSpacing: 1,
+    color: Colors.light.textSecondary,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.half,
+  },
+  statLabel: {
+    letterSpacing: 0.5,
+  },
+  recentSection: {
+    flex: 1,
+  },
+  emptyState: {
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingVertical: Spacing.four,
+  },
+});
