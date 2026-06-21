@@ -126,6 +126,23 @@ def session_connect_url(session) -> Optional[str]:
     return getattr(session, "connect_url", None) or getattr(session, "connectUrl", None)
 
 
+def release_session(session_id: str) -> None:
+    """Request that Browserbase release a running session, so it doesn't linger and
+    burn session minutes after the user is done. Best-effort: ignores errors and
+    works across SDK shapes (sessions.update REQUEST_RELEASE)."""
+    if not session_id:
+        return
+    client = get_client()
+    try:
+        client.sessions.update(
+            session_id,
+            project_id=settings.browserbase_project_id or None,
+            status="REQUEST_RELEASE",
+        )
+    except Exception as exc:  # noqa: BLE001 — release is best-effort cleanup
+        logger.debug("Browserbase session release skipped (%s): %s", session_id, exc)
+
+
 def session_live_view_url(session_id: str) -> Optional[str]:
     """Embeddable fullscreen live-view URL for the running session."""
     client = get_client()

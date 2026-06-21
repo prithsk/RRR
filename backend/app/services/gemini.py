@@ -66,3 +66,23 @@ def generate_sync(system: str, user: str, *, max_output_tokens: int = 1024) -> s
         ),
     )
     return response.text
+
+
+def generate_json_sync(system: str, user: str, *, max_output_tokens: int = 2048) -> str:
+    """Sync counterpart of generate_json: JSON output forced and thinking disabled so
+    the response is clean parseable JSON. Used by worker-thread callers (e.g. the
+    Agent S form-fill loop) that can't await the async client."""
+    client = _get_client()
+    with llm_span("gemini.generate_json_sync", model=settings.gemini_model, system=system, user=user) as span:
+        response = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=user,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=max_output_tokens,
+                response_mime_type="application/json",
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        set_llm_output(span, response.text, getattr(response, "usage_metadata", None))
+        return response.text
