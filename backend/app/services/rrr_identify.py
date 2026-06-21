@@ -46,14 +46,18 @@ async def identify_item_from_bytes(
             model=settings.gemini_model,
             contents=[
                 types.Part.from_bytes(data=image_bytes, mime_type=media_type),
-                (
-                    "Identify this item for donate/sell/discard guidance. "
-                    'Return ONLY JSON: {"itemName":"...","category":"furniture|appliance|electronics|clothing|decor|sports|other","condition":"good","description":"..."}'
-                ),
+                "Identify this item for donate/sell/discard guidance.",
             ],
             config=types.GenerateContentConfig(
                 system_instruction=IDENTIFY_SYSTEM,
-                max_output_tokens=256,
+                max_output_tokens=512,
+                # Force clean, schema-valid JSON so the response can't come back
+                # as prose or truncated/unparseable text.
+                response_mime_type="application/json",
+                response_schema=IdentifyResponse,
+                # gemini-2.5-flash is a thinking model; without this the token
+                # budget can be consumed by reasoning, truncating the JSON.
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
         return response.text or ""
@@ -86,6 +90,16 @@ def _parse_identify_response(raw: str) -> IdentifyResponse:
             )
         except json.JSONDecodeError:
             pass
+
+    # If parsing failed but the text still looks like JSON, never surface the
+    # raw blob to the UI — fall back to a generic name instead.
+    if text.lstrip().startswith("{"):
+        return IdentifyResponse(
+            itemName="unknown item",
+            category="other",
+            condition="good",
+            description="",
+        )
 
     label = re.sub(r'^(item:|object:|label:)\s*', "", text.strip(), flags=re.IGNORECASE)
     label = label.strip('"').strip("'") or "unknown item"
