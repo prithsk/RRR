@@ -1,50 +1,92 @@
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
+import { StatsCard } from '@/components/leaderboard/stats-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing, Typography } from '@/constants/theme';
+import { Colors, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
+import { useProfile } from '@/hooks/use-profile';
+import { formatDate } from '@/utils/format';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const { profile } = useProfile();
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.content}>
-          <ThemedText style={Typography.h2}>Profile</ThemedText>
-          <ThemedText style={Typography.body} themeColor="textSecondary">
-            {user?.email}
-          </ThemedText>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <ThemedText style={[Typography.h1, styles.title]}>Profile</ThemedText>
+
+          <View style={styles.identity}>
+            <View style={styles.avatar}>
+              <ThemedText style={styles.avatarText}>
+                {(user?.email ?? '?').charAt(0).toUpperCase()}
+              </ThemedText>
+            </View>
+            <View style={styles.identityText}>
+              <ThemedText style={Typography.bodyBold} numberOfLines={1}>
+                {user?.email}
+              </ThemedText>
+              {profile?.createdAt ? (
+                <ThemedText style={Typography.caption} themeColor="textSecondary">
+                  Member since {formatDate(profile.createdAt)}
+                </ThemedText>
+              ) : null}
+            </View>
+          </View>
+
+          <StatsCard
+            total={profile?.totalItems ?? 0}
+            donate={profile?.donateCount ?? 0}
+            sell={profile?.sellCount ?? 0}
+            discard={profile?.discardCount ?? 0}
+          />
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <Button title="Sign Out" variant="outline" onPress={signOut} />
         </View>
-        <Button
-          title="Sign Out"
-          variant="outline"
-          onPress={signOut}
-          style={styles.signOut}
-        />
       </SafeAreaView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
+  scroll: {
     padding: Spacing.four,
+    gap: Spacing.four,
   },
-  content: {
-    flex: 1,
+  title: {
+    paddingTop: Spacing.two,
+  },
+  identity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.light.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.two,
   },
-  signOut: {
-    marginBottom: Spacing.four,
+  avatarText: {
+    fontFamily: Typography.h2.fontFamily,
+    fontSize: 24,
+    color: '#FBF3E4',
+  },
+  identityText: {
+    flex: 1,
+    gap: 2,
+  },
+  footer: {
+    padding: Spacing.four,
   },
 });

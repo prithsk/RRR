@@ -4,11 +4,14 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { Card } from '@/components/ui/card';
+import { ItemCard } from '@/components/item/item-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BorderRadius, Colors, FlatBorder, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/hooks/use-auth';
+import { useProfile } from '@/hooks/use-profile';
+import { useItems } from '@/hooks/use-items';
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -24,6 +27,9 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 export default function HomeScreen() {
   const theme = useTheme();
   const { user } = useAuth();
+  const { profile } = useProfile();
+  const { items } = useItems();
+  const recent = items.slice(0, 3);
 
   return (
     <ThemedView style={styles.container}>
@@ -55,9 +61,9 @@ export default function HomeScreen() {
         <View style={styles.statsSection}>
           <ThemedText style={[Typography.captionBold, styles.sectionTitle]}>YOUR STATS</ThemedText>
           <View style={styles.statsRow}>
-            <StatCard label="Donated" value={0} color={theme.donate} />
-            <StatCard label="Sold" value={0} color={theme.sell} />
-            <StatCard label="Tossed" value={0} color={theme.discard} />
+            <StatCard label="Donated" value={profile?.donateCount ?? 0} color={theme.donate} />
+            <StatCard label="Sold" value={profile?.sellCount ?? 0} color={theme.sell} />
+            <StatCard label="Tossed" value={profile?.discardCount ?? 0} color={theme.discard} />
           </View>
         </View>
 
@@ -65,14 +71,26 @@ export default function HomeScreen() {
           <ThemedText style={[Typography.captionBold, styles.sectionTitle]}>
             RECENT ITEMS
           </ThemedText>
-          <Card variant="outlined" padding="five">
-            <View style={styles.emptyState}>
-              <ThemedText style={Typography.bodyBold}>No items yet</ThemedText>
-              <ThemedText style={Typography.caption} themeColor="textSecondary">
-                Scan your first item to see it here
-              </ThemedText>
+          {recent.length === 0 ? (
+            <Card variant="outlined" padding="five">
+              <View style={styles.emptyState}>
+                <ThemedText style={Typography.bodyBold}>No items yet</ThemedText>
+                <ThemedText style={Typography.caption} themeColor="textSecondary">
+                  Scan your first item to see it here
+                </ThemedText>
+              </View>
+            </Card>
+          ) : (
+            <View style={styles.recentList}>
+              {recent.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  onPress={() => router.push(`/item/${item.id}` as any)}
+                />
+              ))}
             </View>
-          </Card>
+          )}
         </View>
       </SafeAreaView>
     </ThemedView>
@@ -133,6 +151,9 @@ const styles = StyleSheet.create({
   },
   recentSection: {
     flex: 1,
+  },
+  recentList: {
+    gap: Spacing.two,
   },
   emptyState: {
     alignItems: 'center',
