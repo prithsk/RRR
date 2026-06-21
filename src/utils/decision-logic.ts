@@ -22,9 +22,10 @@ export function computeDecision(
 ): DecisionResult {
   const scores: Record<Decision, number> = { DONATE: 0, SELL: 0, DISCARD: 0 };
 
-  // 1. Explicit donate intent
+  // 1. Explicit donate intent (a leaning, not an override — a real asking
+  // price or poor condition can still outweigh it)
   if (answers.wantToDonate) {
-    scores.DONATE += 3;
+    scores.DONATE += 2;
   } else {
     scores.SELL += 1;
     scores.DISCARD += 1;
