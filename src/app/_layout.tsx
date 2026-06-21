@@ -15,6 +15,7 @@ import {
 
 import { AuthProvider } from '@/contexts/auth-context';
 import { DisposalProvider } from '@/contexts/disposal-context';
+import { OnboardingProvider, useOnboarding } from '@/contexts/onboarding-context';
 import { useAuth } from '@/hooks/use-auth';
 import { Colors } from '@/constants/theme';
 
@@ -32,22 +33,26 @@ const NavTheme = {
 
 function AuthGate() {
   const { user, loading } = useAuth();
+  const { completed: onboarded, loading: onboardingLoading } = useOnboarding();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || onboardingLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboarding = segments[0] === 'onboarding';
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/login' as any);
-    } else if (user && inAuthGroup) {
+    } else if (user && !onboarded && !inOnboarding) {
+      router.replace('/onboarding' as any);
+    } else if (user && onboarded && (inAuthGroup || inOnboarding)) {
       router.replace('/(tabs)' as any);
     }
-  }, [user, loading, segments]);
+  }, [user, loading, onboarded, onboardingLoading, segments]);
 
-  if (loading) {
+  if (loading || (user && onboardingLoading)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" />
@@ -58,6 +63,7 @@ function AuthGate() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
+      <Stack.Screen name="onboarding" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal' }} />
       <Stack.Screen name="flow" />
@@ -93,9 +99,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={NavTheme}>
       <AuthProvider>
-        <DisposalProvider>
-          <AuthGate />
-        </DisposalProvider>
+        <OnboardingProvider>
+          <DisposalProvider>
+            <AuthGate />
+          </DisposalProvider>
+        </OnboardingProvider>
       </AuthProvider>
     </ThemeProvider>
   );
