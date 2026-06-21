@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import {
   useFonts,
   Fraunces_600SemiBold,
@@ -36,8 +36,12 @@ function AuthGate() {
   const { completed: onboarded, loading: onboardingLoading } = useOnboarding();
   const segments = useSegments();
   const router = useRouter();
+  const rootState = useRootNavigationState();
 
   useEffect(() => {
+    // Wait until the root navigator is actually mounted, otherwise the
+    // replace below targets a navigator that doesn't exist yet.
+    if (!rootState?.key) return;
     if (loading || onboardingLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
@@ -50,7 +54,7 @@ function AuthGate() {
     } else if (user && onboarded && (inAuthGroup || inOnboarding)) {
       router.replace('/(tabs)' as any);
     }
-  }, [user, loading, onboarded, onboardingLoading, segments]);
+  }, [rootState?.key, user, loading, onboarded, onboardingLoading, segments]);
 
   if (loading || (user && onboardingLoading)) {
     return (
