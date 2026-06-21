@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -11,8 +11,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { useDisposalFlow } from '@/contexts/disposal-context';
-import { getCardDetail, getHaulers } from '@/services/api';
-import type { Hauler } from '@/types/disposal';
+import { getCardDetail, getHaulerBids, startHaulerBids } from '@/services/api';
+import type { BidSession } from '@/types/api';
 
 export default function ActionScreen() {
   const {
@@ -20,6 +20,7 @@ export default function ActionScreen() {
     identification,
     location,
     zip,
+    photoBase64,
     cardDetail,
     recommendation,
     setCardDetail,
@@ -60,25 +61,53 @@ export default function ActionScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCard]);
 
-  // --- hauler_bids: real Yelp Fusion lookup ---
-  const [haulers, setHaulers] = useState<Hauler[]>([]);
-  const [haulersStatus, setHaulersStatus] = useState<'loading' | 'done' | 'error'>('loading');
+  // --- hauler_bids: Browserbase discovers haulers, backend texts them (Twilio),
+  // and quotes stream back here as the haulers reply. ---
+  const [bids, setBids] = useState<BidSession | null>(null);
+  const [bidsStatus, setBidsStatus] = useState<'loading' | 'active' | 'error'>('loading');
+  const bidsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!isHaulerBids) return;
     let active = true;
-    setHaulersStatus('loading');
-    getHaulers({ location, itemName: identification?.itemName })
-      .then(({ haulers: found }) => {
+    setBidsStatus('loading');
+    startHaulerBids({
+      location,
+      itemName: identification?.itemName ?? '',
+      itemDescription: identification?.description ?? '',
+      zip,
+      maxHaulers: 3,
+      imageBase64: photoBase64 ?? '',
+    })
+      .then((s) => {
         if (!active) return;
-        setHaulers(found);
-        setHaulersStatus('done');
+        setBids(s);
+        setBidsStatus(s.status === 'error' ? 'error' : 'active');
+        if (s.status === 'collecting') startBidsPolling(s.sessionId);
       })
-      .catch(() => active && setHaulersStatus('error'));
+      .catch(() => active && setBidsStatus('error'));
     return () => {
       active = false;
+      if (bidsPollRef.current) clearInterval(bidsPollRef.current);
     };
-  }, [isHaulerBids, location, identification]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHaulerBids, location]);
+
+  function startBidsPolling(sessionId: string) {
+    if (bidsPollRef.current) clearInterval(bidsPollRef.current);
+    bidsPollRef.current = setInterval(async () => {
+      try {
+        const s = await getHaulerBids(sessionId);
+        setBids(s);
+        if (s.status !== 'collecting' && bidsPollRef.current) {
+          clearInterval(bidsPollRef.current);
+          bidsPollRef.current = null;
+        }
+      } catch {
+        // transient poll errors are fine — keep waiting for quotes
+      }
+    }, 3000);
+  }
 
   function startOver() {
     reset();
@@ -115,42 +144,43 @@ export default function ActionScreen() {
     );
   }
 
-  // --- hauler_bids (Yelp Fusion) ---
+  // --- hauler_bids (Twilio SMS bids) ---
   if (isHaulerBids) {
+    const quotes = bids?.quotes ?? [];
     return (
       <ThemedView style={styles.container}>
         <View style={styles.content}>
-          <AgentMessage title="LOCAL HAULERS">
+          <AgentMessage title="HAULER BIDS">
             <ThemedText style={Typography.body}>
-              Top-rated junk-removal haulers near {location || 'you'}. Tap to call for a quote.
+              We found local junk-removal haulers near {location || 'you'} and texted them for
+              quotes. Bids appear below as they reply.
             </ThemedText>
+            {bids?.detail ? (
+              <View style={styles.bidsStatus}>
+                {bids.status === 'collecting' ? (
+                  <ActivityIndicator size="small" color={Colors.light.primary} />
+                ) : null}
+                <ThemedText style={Typography.caption} themeColor="textSecondary">
+                  {bids.detail}
+                </ThemedText>
+              </View>
+            ) : null}
           </AgentMessage>
-          {haulersStatus === 'loading' ? (
+          {bidsStatus === 'loading' ? (
             <View style={styles.block}>
               <ActivityIndicator size="large" color={Colors.light.primary} />
               <ThemedText style={Typography.caption} themeColor="textSecondary">
-                Finding haulers…
+                Finding & texting local haulers…
               </ThemedText>
             </View>
-          ) : haulersStatus === 'error' || haulers.length === 0 ? (
+          ) : bidsStatus === 'error' || quotes.length === 0 ? (
             <ThemedText style={Typography.body} themeColor="textSecondary">
-              No haulers found nearby right now. Try another option or start over.
+              {bids?.detail || 'No haulers reachable right now. Try another option or start over.'}
             </ThemedText>
           ) : (
             <View style={styles.haulers}>
-              {haulers.map((h) => (
-                <HaulerRow
-                  key={h.phone}
-                  quote={{
-                    haulerName: h.haulerName,
-                    rating: h.rating,
-                    distanceMi: h.distanceMi,
-                    priceUsd: null,
-                    phone: h.phone,
-                    status: 'replied',
-                  }}
-                  onCall={callNumber}
-                />
+              {quotes.map((q) => (
+                <HaulerRow key={q.phone} quote={q} onCall={callNumber} />
               ))}
             </View>
           )}
@@ -246,7 +276,7 @@ export default function ActionScreen() {
   const sourceUrl = recommendation.sourceUrl ?? cardDetail?.sourceUrl ?? null;
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.contentScroll}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.contentScroll}>
         <AgentMessage title="HERE'S THE PLAN">
           <ThemedText style={Typography.body}>{recommendation.summary}</ThemedText>
         </AgentMessage>
@@ -281,7 +311,7 @@ export default function ActionScreen() {
             </ThemedText>
           </Card>
         ) : null}
-      </View>
+      </ScrollView>
       <View style={styles.footer}>
         {sourceUrl ? (
           <Button title="Open the website" size="lg" onPress={() => openWebsite(sourceUrl)} />
@@ -308,12 +338,14 @@ function Footer({ onAsk, onStartOver }: { onAsk: () => void; onStartOver: () => 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: Spacing.four },
   content: { flex: 1, gap: Spacing.four, justifyContent: 'center' },
-  contentScroll: { flex: 1, gap: Spacing.three },
+  flex: { flex: 1 },
+  contentScroll: { gap: Spacing.three, paddingBottom: Spacing.three },
   block: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
   center: { textAlign: 'center' },
   card: { gap: Spacing.two, alignItems: 'flex-start' },
   number: { marginVertical: Spacing.one },
   haulers: { gap: Spacing.two },
+  bidsStatus: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.two },
   footer: { paddingTop: Spacing.three, gap: Spacing.two },
   footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   retry: { marginTop: Spacing.three },

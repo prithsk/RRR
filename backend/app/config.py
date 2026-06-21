@@ -14,9 +14,34 @@ class Settings(BaseSettings):
 
     browserbase_api_key: str = ""
     browserbase_project_id: str = ""
+    # Persistent context: a signed-in Yelp/Google login is reused across sessions so
+    # the brittle Google OAuth only has to succeed once. Leave blank to auto-create
+    # one on first run (the id is logged — paste it here to make it durable).
+    browserbase_context_id: str = ""
+    # Bot-evasion for Google sign-in (reduces the "this browser may not be secure"
+    # block). advanced_stealth requires the Browserbase Scale plan.
+    browserbase_advanced_stealth: bool = False
+    browserbase_proxies: bool = False
 
-    # Yelp Fusion (junk-hauler search)
-    yelp_api_key: str = ""
+    # Twilio SMS — multi-hauler "bids" blast. Haulers are discovered by the
+    # Browserbase agent (no Yelp), then texted a templated quote request; their
+    # replies hit the inbound webhook and stream back as quotes.
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""  # E.164 SMS-capable Twilio number, e.g. +14155551234
+    twilio_validate_signature: bool = False  # verify X-Twilio-Signature on the webhook
+    # Minimum local junk haulers the discovery agent must surface for the bids flow.
+    haulers_min: int = 3
+    # Public HTTPS base URL the backend is reachable at (e.g. your ngrok URL). Used to
+    # build the MMS media URL Twilio fetches the item photo from. Leave blank to send
+    # plain SMS (no image).
+    public_base_url: str = ""
+    # TEST ONLY: route every hauler text to this one number instead of the real
+    # haulers. Lets you demo the full bid loop on a Twilio trial (which can only
+    # text *verified* numbers). Leave blank in real use.
+    bids_test_phone: str = ""
+    cache_ttl_haulers: int = 43200  # 12 hours
+    cache_ttl_bids: int = 3600  # 1 hour — a live bidding session
 
     geoip_url: str = "http://ip-api.com/json"
     geo_max_match_km: float = 150.0  # closest-campus match only within this radius

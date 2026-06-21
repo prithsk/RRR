@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import type {
   AgentFormRequest,
   AgentFormSession,
+  BidSession,
   CardDetailRequest,
   CardDetailResponse,
   ChatRequest,
@@ -14,9 +15,9 @@ import type {
   ScheduleResponse,
   ServicesRequest,
   ServicesResponse,
+  StartBidsRequest,
   TriageRequest,
   TriageResponse,
-  YelpOutreachRequest,
 } from '@/types/api';
 import type { ItemCategory } from '@/types/item';
 import type { DisposalCard, Hauler } from '@/types/disposal';
@@ -116,8 +117,12 @@ export async function getAgentFormStatus(sessionId: string): Promise<AgentFormSe
   return apiGet(`/api/agent/form/${sessionId}`);
 }
 
-export async function startYelpOutreach(request: YelpOutreachRequest): Promise<AgentFormSession> {
-  return apiPost('/api/agent/yelp', request);
+export async function startHaulerBids(request: StartBidsRequest): Promise<BidSession> {
+  return apiPost('/api/haulers/bids', request);
+}
+
+export async function getHaulerBids(sessionId: string): Promise<BidSession> {
+  return apiGet(`/api/haulers/bids/${sessionId}`);
 }
 
 export async function discoverServices(request: ServicesRequest): Promise<ServicesResponse> {

@@ -87,10 +87,6 @@ export default function ResultsScreen() {
     router.push('/flow/chat' as any);
   }
 
-  function messageHaulers() {
-    router.push('/flow/agent-yelp' as any);
-  }
-
   return (
     <ThemedView style={styles.container}>
       {status === 'loading' ? (
@@ -133,15 +129,6 @@ export default function ResultsScreen() {
           </View>
         </ScrollView>
       )}
-
-      {status === 'populated' ? (
-        <Button
-          title="Message local haulers via Yelp"
-          variant="outline"
-          onPress={messageHaulers}
-          style={styles.haulerBtn}
-        />
-      ) : null}
 
       <View style={styles.footerRow}>
         {status === 'populated' ? (

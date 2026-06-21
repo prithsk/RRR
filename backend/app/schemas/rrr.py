@@ -211,17 +211,7 @@ class AgentFormSession(BaseModel):
     detail: str = ""
 
 
-class YelpOutreachRequest(BaseModel):
-    """Agent S opens Yelp, the user signs in, then it messages the top junk haulers."""
-    location: str
-    itemName: str = ""
-    itemDescription: str = ""
-    # Optional custom message; a sensible default is generated when blank.
-    message: str = ""
-    maxHaulers: int = 3
-
-
-# --- Yelp haulers ----------------------------------------------------------
+# --- Local junk haulers (Browserbase discovery → Twilio SMS bids) ----------
 
 class HaulersRequest(BaseModel):
     location: str
@@ -238,3 +228,35 @@ class Hauler(BaseModel):
 
 class HaulersResponse(BaseModel):
     haulers: List[Hauler]
+
+
+class StartBidsRequest(BaseModel):
+    """Discover local haulers and text them all a templated quote request."""
+    location: str
+    itemName: str = ""
+    itemDescription: str = ""
+    zip: str = ""
+    maxHaulers: int = 3
+    # Base64-encoded item photo (no data: prefix). When set and PUBLIC_BASE_URL is
+    # configured, it's attached to the hauler texts as an MMS image.
+    imageBase64: str = ""
+    imageContentType: str = "image/jpeg"
+
+
+class HaulerQuote(BaseModel):
+    haulerName: str
+    rating: float = 0.0
+    distanceMi: float = 0.0
+    phone: str
+    priceUsd: Optional[float] = None
+    # "pending" until the hauler texts back; "replied" once a quote (or message)
+    # arrives; "no_sms" when the number couldn't be texted (e.g. landline).
+    status: Literal["pending", "replied", "no_sms"] = "pending"
+    reply: str = ""
+
+
+class BidSession(BaseModel):
+    sessionId: str
+    status: Literal["collecting", "done", "error"] = "collecting"
+    detail: str = ""
+    quotes: List[HaulerQuote] = []

@@ -22,6 +22,7 @@ export function HaulerRow({ quote, onCall }: HaulerRowProps) {
   const animStyle = useAnimatedStyle(() => ({ transform: [{ translateX: slide.value }] }));
 
   const pending = quote.status === 'pending';
+  const noSms = quote.status === 'no_sms';
 
   return (
     <Animated.View style={animStyle}>
@@ -31,6 +32,11 @@ export function HaulerRow({ quote, onCall }: HaulerRowProps) {
           <ThemedText style={Typography.caption} themeColor="textSecondary">
             ★ {quote.rating.toFixed(1)} · {quote.distanceMi} mi
           </ThemedText>
+          {quote.status === 'replied' && quote.reply ? (
+            <ThemedText style={Typography.caption} themeColor="textSecondary" numberOfLines={2}>
+              “{quote.reply}”
+            </ThemedText>
+          ) : null}
         </View>
         <View style={styles.right}>
           {quote.priceUsd != null ? (
@@ -38,6 +44,10 @@ export function HaulerRow({ quote, onCall }: HaulerRowProps) {
           ) : pending ? (
             <ThemedText style={Typography.caption} themeColor="textSecondary">
               waiting…
+            </ThemedText>
+          ) : noSms ? (
+            <ThemedText style={Typography.caption} themeColor="textSecondary">
+              call only
             </ThemedText>
           ) : null}
           <Button title="Call" size="sm" onPress={() => onCall(quote.phone)} />

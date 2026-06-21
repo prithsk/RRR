@@ -41,10 +41,13 @@ export interface HaulerQuote {
   distanceMi: number;
   priceUsd: number | null;
   phone: string;
-  status: 'pending' | 'replied';
+  // "pending" awaiting a text-back, "replied" once a quote arrives, "no_sms" when
+  // the number couldn't be texted (landline) — the user can still tap Call.
+  status: 'pending' | 'replied' | 'no_sms';
+  reply?: string;
 }
 
-/** A junk-removal business from the Yelp Fusion proxy (tap-to-call). */
+/** A junk-removal business discovered by the Browserbase agent (tap-to-call). */
 export interface Hauler {
   haulerName: string;
   rating: number;

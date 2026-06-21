@@ -7,6 +7,8 @@ browserbase>=1.0.0
 python-dotenv>=1.0.0
 redis>=5.0.0
 python-multipart>=0.0.9
+# Twilio — SMS blast to local junk haulers + inbound reply webhook (the bids UX)
+twilio>=9.0.0
 # Agent S form-filling over a Browserbase cloud session.
 # playwright drives the remote browser over CDP; run `playwright install chromium`.
 playwright>=1.47.0

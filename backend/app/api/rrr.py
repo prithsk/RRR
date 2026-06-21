@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import base64
 
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+
+from app.config import settings
 from app.deps.auth import require_user_id
 from app.schemas.rrr import (
     AgentFormRequest,
     AgentFormSession,
+    BidSession,
     CardDetailRequest,
     CardDetailResponse,
     ChatRequest,
@@ -22,20 +26,21 @@ from app.schemas.rrr import (
     ScheduleResponse,
     ServicesRequest,
     ServicesResponse,
+    StartBidsRequest,
     TriageRequest,
     TriageResponse,
-    YelpOutreachRequest,
 )
-from app.services.agent_s import get_form_status, start_form_fill, start_yelp_outreach
+from app.services.agent_s import get_form_status, start_form_fill
 from app.services.rrr_card_agent import get_card_detail
 from app.services.rrr_chat import answer_question
 from app.services.rrr_disposal import discover_disposal_options
-from app.services.rrr_haulers import find_haulers
+from app.services.rrr_haulers import discover_haulers
 from app.services.rrr_identify import identify_item_from_image
 from app.services.rrr_location_research import research_location
 from app.services.rrr_schedule import draft_schedule
 from app.services.rrr_service_discovery import discover_services
 from app.services.rrr_triage import triage_item
+from app.services.twilio_bids import get_bids, get_media, handle_inbound_sms, start_bids
 
 router = APIRouter()
 
@@ -123,20 +128,6 @@ async def agent_form_status(
     return state
 
 
-@router.post("/agent/yelp", response_model=AgentFormSession)
-async def agent_yelp_start(
-    body: YelpOutreachRequest,
-    _user_id: str = Depends(require_user_id),
-):
-    """Agent S opens Yelp; the user signs in and it drafts messages to the top haulers."""
-    try:
-        return await start_yelp_outreach(body)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail="Could not start the Yelp agent. Please try again."
-        ) from exc
-
-
 @router.post("/identify", response_model=IdentifyResponse)
 async def identify_item(
     body: IdentifyRequest,
@@ -189,15 +180,89 @@ async def haulers(
     body: HaulersRequest,
     _user_id: str = Depends(require_user_id),
 ):
-    """Yelp Fusion search for local junk-removal haulers (tap-to-call)."""
+    """Browserbase agent: discover local junk-removal haulers (tap-to-call list)."""
     try:
-        found = await find_haulers(body)
+        found = await discover_haulers(body)
         return HaulersResponse(haulers=found)
     except Exception as exc:
         raise HTTPException(
             status_code=502,
             detail="Could not find haulers. Please try again.",
         ) from exc
+
+
+@router.post("/haulers/bids", response_model=BidSession)
+async def haulers_bids_start(
+    body: StartBidsRequest,
+    _user_id: str = Depends(require_user_id),
+):
+    """Discover local haulers and text them all a templated quote request (Twilio)."""
+    try:
+        return await start_bids(body)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail="Could not start the hauler bids. Please try again."
+        ) from exc
+
+
+@router.get("/haulers/bids/{session_id}", response_model=BidSession)
+async def haulers_bids_status(
+    session_id: str,
+    _user_id: str = Depends(require_user_id),
+):
+    """Poll a bids session — quotes stream in as haulers text back."""
+    session = await get_bids(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Unknown bids session")
+    return session
+
+
+@router.get("/haulers/media/{media_id}")
+async def haulers_media(media_id: str):
+    """Public item photo for Twilio MMS to fetch (unauthenticated)."""
+    data = await get_media(media_id)
+    if not data or not data.get("b64"):
+        raise HTTPException(status_code=404, detail="Media not found")
+    try:
+        raw = base64.b64decode(data["b64"])
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=404, detail="Bad media") from exc
+    return Response(content=raw, media_type=data.get("ct", "image/jpeg"))
+
+
+@router.post("/haulers/sms-webhook")
+async def haulers_sms_webhook(request: Request):
+    """Twilio inbound SMS webhook — a hauler's reply becomes a quote.
+
+    Unauthenticated (Twilio calls it). Set TWILIO_VALIDATE_SIGNATURE=true to enforce
+    X-Twilio-Signature validation. Always returns empty TwiML so Twilio doesn't retry.
+    """
+    form = await request.form()
+    from_number = str(form.get("From", ""))
+    body = str(form.get("Body", ""))
+
+    if settings.twilio_validate_signature:
+        if not _valid_twilio_signature(request, dict(form)):
+            raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
+    if from_number:
+        try:
+            await handle_inbound_sms(from_number, body)
+        except Exception:  # noqa: BLE001 — never fail the webhook; Twilio would retry
+            pass
+    return Response(content="<Response></Response>", media_type="application/xml")
+
+
+def _valid_twilio_signature(request: Request, params: dict) -> bool:
+    try:
+        from twilio.request_validator import RequestValidator
+
+        validator = RequestValidator(settings.twilio_auth_token)
+        signature = request.headers.get("X-Twilio-Signature", "")
+        url = str(request.url)
+        return validator.validate(url, params, signature)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 @router.post("/schedule", response_model=ScheduleResponse)

@@ -59,16 +59,15 @@ async def main():
     import app.services.cache as cache
     import app.services.browserbase_research as bbr
     import app.services.geoip as geoip
-    from app.services.rrr_haulers import find_haulers
+    from app.services.rrr_haulers import discover_haulers
     from app.services.rrr_service_discovery import _parse_services
     from app.services.rrr_disposal import _parse_cards
     from app.services.rrr_identify import _parse_identify_response
     from app.services.rrr_schedule import _parse_json
     import redis.asyncio as aioredis
 
-    # 1) Yelp fallback to [] — YELP_API_KEY absent
-    settings.yelp_api_key = ""
-    await find_haulers(HaulersRequest(location="Berkeley, CA", itemName="old couch"))
+    # 1) Hauler discovery below the minimum — exercises the silent-failure capture
+    await discover_haulers(HaulersRequest(location="Berkeley, CA", itemName="old couch"))
 
     # 2-5) Gemini structured-output JSON parse failures (4 endpoints)
     _parse_services('{ "services": [ {name: broken json } ] }')

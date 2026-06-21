@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import List, Optional
 
@@ -7,7 +8,11 @@ from browserbase import Browserbase
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 _client: Optional[Browserbase] = None
+# Lazily-created persistent context id, used when none is configured in .env.
+_context_id: Optional[str] = None
 
 
 def get_client() -> Browserbase:
@@ -50,12 +55,69 @@ def fetch_page(
     }
 
 
-def create_session():
-    """Create a full Browserbase session for JS-heavy pages or PDFs."""
+def _persistent_context_id() -> Optional[str]:
+    """Return a Browserbase context id to persist logins across sessions.
+
+    Prefers the configured BROWSERBASE_CONTEXT_ID; otherwise creates one once per
+    process and logs it so it can be pinned in .env for true durability.
+    """
+    global _context_id
+    if settings.browserbase_context_id:
+        return settings.browserbase_context_id
+    if _context_id:
+        return _context_id
+    try:
+        ctx = get_client().contexts.create(project_id=settings.browserbase_project_id)
+        _context_id = getattr(ctx, "id", None)
+        if _context_id:
+            logger.info(
+                "Created Browserbase context %s — set BROWSERBASE_CONTEXT_ID=%s in .env "
+                "to keep the Yelp/Google login across restarts.",
+                _context_id,
+                _context_id,
+            )
+        return _context_id
+    except Exception as exc:  # noqa: BLE001 — context persistence is best-effort
+        logger.warning("Could not create a persistent Browserbase context: %s", exc)
+        return None
+
+
+def create_session(
+    *,
+    persist_login: bool = False,
+    stealth: bool = False,
+    viewport: Optional[tuple[int, int]] = None,
+):
+    """Create a full Browserbase session for JS-heavy pages or PDFs.
+
+    persist_login → attach a persistent context so a one-time Google/Yelp sign-in is
+    reused on later sessions. stealth → enable bot-evasion + captcha solving (and
+    proxies if configured) so Google's "browser may not be secure" block is avoided.
+    viewport → (width, height) of the remote browser; pass a portrait size for flows
+    streamed into the phone WebView so the page fits without horizontal scrolling.
+    """
     client = get_client()
-    kwargs = {}
+    kwargs: dict = {}
     if settings.browserbase_project_id:
         kwargs["project_id"] = settings.browserbase_project_id
+
+    browser_settings: dict = {}
+    if persist_login:
+        cid = _persistent_context_id()
+        if cid:
+            browser_settings["context"] = {"id": cid, "persist": True}
+    if stealth and settings.browserbase_advanced_stealth:
+        browser_settings["advanced_stealth"] = True
+    if stealth:
+        browser_settings["solve_captchas"] = True
+    if viewport:
+        browser_settings["viewport"] = {"width": viewport[0], "height": viewport[1]}
+
+    if browser_settings:
+        kwargs["browser_settings"] = browser_settings
+    if stealth and settings.browserbase_proxies:
+        kwargs["proxies"] = True
+
     return client.sessions.create(**kwargs)
 
 

@@ -144,11 +144,31 @@ export interface AgentFormSession {
   detail: string;
 }
 
-// --- Agent S Yelp hauler outreach ---
-export interface YelpOutreachRequest {
+// --- Twilio hauler bids ---
+export interface StartBidsRequest {
   location: string;
   itemName?: string;
   itemDescription?: string;
-  message?: string;
+  zip?: string;
   maxHaulers?: number;
+  /** Base64 item photo (no data: prefix) — attached to the hauler texts as MMS. */
+  imageBase64?: string;
+  imageContentType?: string;
+}
+
+export interface HaulerQuote {
+  haulerName: string;
+  rating: number;
+  distanceMi: number;
+  phone: string;
+  priceUsd: number | null;
+  status: 'pending' | 'replied' | 'no_sms';
+  reply: string;
+}
+
+export interface BidSession {
+  sessionId: string;
+  status: 'collecting' | 'done' | 'error';
+  detail: string;
+  quotes: HaulerQuote[];
 }
